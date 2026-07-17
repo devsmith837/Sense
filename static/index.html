@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>GolfSense</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="topbar">
+      <span class="brand">🏌️ GolfSense</span>
+
+      <select id="view-select">
+        <option value="golfsense">🏌️ GolfSense</option>
+        <option value="rawdata">📊 Raw Data</option>
+        <option value="waveforms">📈 Waveforms</option>
+        <option value="attitude">🧭 Attitude</option>
+        <option value="sensor3d">🎲 3D Sensor</option>
+        <option value="config">⚙️ Configuration</option>
+        <option value="recording">💾 Recording</option>
+      </select>
+
+      <div id="topbar-spacer"></div>
+
+      <button id="calibrate-btn" style="display:none;">🎯 Calibrate / Set Zero</button>
+      <div class="status-chip" id="calibration-chip" style="display:none;">
+        <span id="calibration-dot" class="led"></span>
+        <span id="calibration-label">Not Calibrated</span>
+      </div>
+      <div class="status-chip">
+        <span id="sensor-led" class="led"></span>
+        <span id="sensor-status-label">Disconnected</span>
+      </div>
+      <div class="status-chip" id="frame-rate-chip">0 Hz</div>
+      <button id="disconnect-btn" class="secondary" style="display:none;">Disconnect</button>
+    </div>
+
+    <div id="main-content">
+      <div id="connection-panel">
+        <h2>Connect Sensor</h2>
+        <p style="color:var(--text-dim); font-size:13px;">
+          Auto-scanning COM ports for a WitMotion BWT901CL. A simulated Demo Sensor
+          is always available for testing without hardware.
+        </p>
+        <div id="rescan-row">
+          <span id="sample-counter" style="color:var(--text-dim); font-size:12px;">0 samples received</span>
+          <button id="rescan-btn" class="secondary">Rescan Ports</button>
+        </div>
+        <div id="port-list">
+          <div style="color:var(--text-dim)">Scanning...</div>
+        </div>
+      </div>
+
+      <div id="view-container" style="display:none;">
+        <section id="view-golfsense" class="view">
+          <div class="golf-grid">
+            <div class="golf-panel" id="panel-driver">
+              <h3>Live 3D Driver Head</h3>
+              <div id="panel1-canvas-wrap">
+                <canvas id="panel1-canvas"></canvas>
+                <div id="panel1-face-inset">
+                  <div id="panel1-face-angle">0.0°</div>
+                  <div id="panel1-face-label">SQUARE</div>
+                </div>
+                <div id="panel1-uncalibrated-note">Click "Calibrate / Set Zero" at address to begin.</div>
+              </div>
+            </div>
+
+            <div class="golf-panel" id="panel-replay">
+              <h3>Swing Replay &amp; Analysis <span id="replay-swing-label" class="panel-subhead"></span></h3>
+              <div id="panel2-canvas-wrap">
+                <canvas id="panel2-canvas"></canvas>
+                <div id="panel2-empty-note">Waiting for a swing to be captured...</div>
+              </div>
+              <div id="panel2-chart-wrap" style="display:none;">
+                <canvas id="panel2-chart"></canvas>
+                <div id="panel2-scrub-line"></div>
+              </div>
+              <div id="panel2-scrubber-wrap" style="display:none;">
+                <div id="panel2-markers"></div>
+                <input type="range" id="panel2-scrubber" min="0" max="1000" value="0" step="1">
+              </div>
+              <div id="panel2-controls" style="display:none;">
+                <button id="panel2-play-btn" class="secondary">▶ Play</button>
+                <select id="panel2-speed-select">
+                  <option value="0.25">0.25x</option>
+                  <option value="0.5">0.5x</option>
+                  <option value="1" selected>1x</option>
+                </select>
+                <span id="panel2-time-label">0.00s / 0.00s</span>
+              </div>
+            </div>
+
+            <div class="golf-panel" id="panel-impact">
+              <h3>Impact Zone</h3>
+              <div id="panel3-empty-note" class="placeholder-view">Waiting for a swing to be captured...</div>
+              <div id="panel3-content" style="display:none;">
+                <svg id="panel3-face-svg" viewBox="0 0 200 200"></svg>
+                <div id="panel3-gear-label"></div>
+                <div id="panel3-attack-wrap">
+                  <svg id="panel3-attack-svg" viewBox="0 0 200 90"></svg>
+                  <div id="panel3-attack-label"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="golf-panel" id="panel-flight">
+              <h3>Ball Flight Prediction</h3>
+              <div id="panel4-empty-note" class="placeholder-view">Waiting for a swing to be captured...</div>
+              <div id="panel4-content" style="display:none;">
+                <svg id="panel4-fairway-svg" viewBox="0 0 200 260"></svg>
+                <div id="panel4-shape-label"></div>
+                <div id="panel4-stats-row">
+                  <span id="panel4-carry"></span>
+                  <span id="panel4-curve"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="golf-panel" id="panel-diagnosis">
+              <h3>Swing Diagnosis &amp; Coaching Tips</h3>
+              <div id="panel5-empty-note" class="placeholder-view">Waiting for a swing to be captured...</div>
+              <div id="panel5-tips" style="display:none;"></div>
+            </div>
+          </div>
+          <div class="golf-history-bar">
+            <div id="session-summary">
+              <span>Avg Face: <b id="summary-avg-face">—</b></span>
+              <span>Consistency (σ): <b id="summary-face-std">—</b></span>
+              <span>Avg Speed: <b id="summary-avg-speed">—</b></span>
+              <span>Most Common Shape: <b id="summary-common-shape">—</b></span>
+            </div>
+            <div id="session-cards"></div>
+          </div>
+        </section>
+
+        <section id="view-rawdata" class="view">
+          <div class="table-wrap">
+            <table id="rawdata-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>AccX (g)</th><th>AccY (g)</th><th>AccZ (g)</th>
+                  <th>GyroX (°/s)</th><th>GyroY (°/s)</th><th>GyroZ (°/s)</th>
+                  <th>Roll (°)</th><th>Pitch (°)</th><th>Yaw (°)</th>
+                  <th>MagX (µT)</th><th>MagY (µT)</th><th>MagZ (µT)</th>
+                  <th>Q0</th><th>Q1</th><th>Q2</th><th>Q3</th>
+                </tr>
+              </thead>
+              <tbody id="rawdata-body">
+                <tr><td colspan="16" style="color:var(--text-dim);">Waiting for data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="view-waveforms" class="view">
+          <div id="waveforms-grid" class="waveform-grid"></div>
+        </section>
+
+        <section id="view-attitude" class="view">
+          <div class="attitude-layout">
+            <div class="attitude-gauges">
+              <div class="gauge-block">
+                <svg id="ah-svg" viewBox="0 0 300 300" class="ah-svg">
+                  <defs>
+                    <clipPath id="ahClip"><circle cx="150" cy="150" r="140"/></clipPath>
+                  </defs>
+                  <g clip-path="url(#ahClip)">
+                    <g id="ah-horizon">
+                      <rect x="-250" y="-500" width="700" height="650" fill="#3a6ea5"/>
+                      <rect x="-250" y="150" width="700" height="650" fill="#6b4423"/>
+                      <line x1="-250" y1="150" x2="450" y2="150" stroke="#fff" stroke-width="2.5"/>
+                      <g stroke="#fff" stroke-width="1.5" opacity="0.85">
+                        <line x1="130" y1="90" x2="170" y2="90"/><text x="176" y="94" fill="#fff" font-size="10">30</text>
+                        <line x1="130" y1="120" x2="170" y2="120"/><text x="176" y="124" fill="#fff" font-size="10">15</text>
+                        <line x1="130" y1="180" x2="170" y2="180"/><text x="176" y="184" fill="#fff" font-size="10">-15</text>
+                        <line x1="130" y1="210" x2="170" y2="210"/><text x="176" y="214" fill="#fff" font-size="10">-30</text>
+                      </g>
+                    </g>
+                  </g>
+                  <circle cx="150" cy="150" r="140" fill="none" stroke="#111" stroke-width="10"/>
+                  <g>
+                    <line x1="90" y1="150" x2="128" y2="150" stroke="#f1c40f" stroke-width="4"/>
+                    <line x1="172" y1="150" x2="210" y2="150" stroke="#f1c40f" stroke-width="4"/>
+                    <polygon points="150,144 144,156 156,156" fill="#f1c40f"/>
+                  </g>
+                </svg>
+                <div class="gauge-label">Artificial Horizon (Roll / Pitch)</div>
+              </div>
+
+              <div class="gauge-block">
+                <svg id="compass-svg" viewBox="0 0 300 300" class="ah-svg">
+                  <circle cx="150" cy="150" r="140" fill="#1e2128" stroke="#333843" stroke-width="2"/>
+                  <g font-size="16" fill="#e8eaed" text-anchor="middle" font-weight="600">
+                    <text x="150" y="30">N</text>
+                    <text x="270" y="156">E</text>
+                    <text x="150" y="278">S</text>
+                    <text x="32" y="156">W</text>
+                  </g>
+                  <g stroke="#555" stroke-width="1">
+                    <line x1="150" y1="15" x2="150" y2="35"/>
+                    <line x1="150" y1="265" x2="150" y2="285"/>
+                    <line x1="15" y1="150" x2="35" y2="150"/>
+                    <line x1="265" y1="150" x2="285" y2="150"/>
+                  </g>
+                  <g id="compass-needle">
+                    <polygon points="150,50 138,160 150,140 162,160" fill="#e74c3c"/>
+                    <polygon points="150,250 138,140 150,160 162,140" fill="#9aa1ac"/>
+                  </g>
+                  <circle cx="150" cy="150" r="6" fill="#e8eaed"/>
+                </svg>
+                <div class="gauge-label">Compass (Yaw / Heading)</div>
+              </div>
+            </div>
+
+            <div class="attitude-readouts">
+              <div class="big-readout"><span class="big-value" id="att-roll">0.0°</span><span class="big-label">Roll</span></div>
+              <div class="big-readout"><span class="big-value" id="att-pitch">0.0°</span><span class="big-label">Pitch</span></div>
+              <div class="big-readout"><span class="big-value" id="att-yaw">0.0°</span><span class="big-label">Yaw</span></div>
+              <div class="small-readouts">
+                <div><span>AccX</span><b id="att-ax">0.000</b></div>
+                <div><span>AccY</span><b id="att-ay">0.000</b></div>
+                <div><span>AccZ</span><b id="att-az">0.000</b></div>
+                <div><span>GyroX</span><b id="att-gx">0.0</b></div>
+                <div><span>GyroY</span><b id="att-gy">0.0</b></div>
+                <div><span>GyroZ</span><b id="att-gz">0.0</b></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-sensor3d" class="view">
+          <div class="sensor3d-layout">
+            <div id="sensor3d-canvas-wrap"><canvas id="sensor3d-canvas"></canvas></div>
+            <button id="sensor3d-reset-btn" class="secondary">Reset View</button>
+          </div>
+        </section>
+
+        <section id="view-config" class="view">
+          <div class="config-grid">
+            <div class="config-card">
+              <h3>Output Settings</h3>
+              <label class="cfg-row">Output Rate
+                <select id="cfg-rate">
+                  <option value="0.2">0.2 Hz</option>
+                  <option value="0.5">0.5 Hz</option>
+                  <option value="1">1 Hz</option>
+                  <option value="2">2 Hz</option>
+                  <option value="5">5 Hz</option>
+                  <option value="10">10 Hz</option>
+                  <option value="20">20 Hz</option>
+                  <option value="50">50 Hz</option>
+                  <option value="100">100 Hz</option>
+                  <option value="200" selected>200 Hz</option>
+                </select>
+              </label>
+              <label class="cfg-row">Bandwidth
+                <select id="cfg-bandwidth">
+                  <option value="20">20 Hz</option>
+                  <option value="42">42 Hz</option>
+                  <option value="98">98 Hz</option>
+                  <option value="188">188 Hz</option>
+                  <option value="256" selected>256 Hz</option>
+                </select>
+              </label>
+              <div class="cfg-row">
+                Algorithm
+                <label><input type="radio" name="cfg-algo" value="6" checked> 6-axis</label>
+                <label><input type="radio" name="cfg-algo" value="9"> 9-axis</label>
+              </div>
+              <div class="cfg-row">
+                Installation Direction
+                <label><input type="radio" name="cfg-dir" value="h" checked> Horizontal</label>
+                <label><input type="radio" name="cfg-dir" value="v"> Vertical</label>
+              </div>
+              <div class="cfg-row content-checks">
+                Output Content
+                <label><input type="checkbox" class="cfg-content" value="time" checked> Time</label>
+                <label><input type="checkbox" class="cfg-content" value="acc" checked> Acceleration</label>
+                <label><input type="checkbox" class="cfg-content" value="gyro" checked> Angular Velocity</label>
+                <label><input type="checkbox" class="cfg-content" value="angle" checked> Angle</label>
+                <label><input type="checkbox" class="cfg-content" value="mag" checked> Magnetic Field</label>
+                <label><input type="checkbox" class="cfg-content" value="quaternion" checked> Quaternion</label>
+              </div>
+              <div class="config-actions">
+                <button id="cfg-read-btn" class="secondary">Read Config</button>
+                <button id="cfg-save-btn">Save Config</button>
+              </div>
+              <div id="cfg-current" class="config-current-note">No config read yet.</div>
+            </div>
+
+            <div class="config-card">
+              <h3>Calibration</h3>
+
+              <button id="cal-accel-btn">Accelerometer Calibration</button>
+              <div id="cal-accel-progress" class="cal-progress" style="display:none;">
+                <div class="cal-progress-bar"><div id="cal-accel-fill" class="cal-progress-fill"></div></div>
+                <div id="cal-accel-label" class="cal-progress-label">Keep club still...</div>
+              </div>
+
+              <button id="cal-mag-btn">Magnetic Field Calibration</button>
+              <div id="cal-mag-anim" class="cal-mag-anim" style="display:none;">
+                <div class="rotate-icon">🔄</div>
+                <p>Slowly rotate the sensor through all axes (figure-8 motion) for a few seconds.</p>
+                <button id="cal-mag-done-btn">Done — Save Calibration</button>
+              </div>
+
+              <button id="cal-gyro-btn">Gyroscope Auto-Calibration</button>
+              <div id="cal-gyro-progress" class="cal-progress" style="display:none;">
+                <div class="cal-progress-bar"><div id="cal-gyro-fill" class="cal-progress-fill"></div></div>
+                <div id="cal-gyro-label" class="cal-progress-label">Keep sensor still...</div>
+              </div>
+
+              <button id="cal-resetz-btn" class="secondary">Reset Z-axis Angle to 0</button>
+              <button id="cal-setref-btn" class="secondary">Set Angle Reference (zero here)</button>
+            </div>
+
+            <div class="config-card">
+              <h3>Danger Zone</h3>
+              <p style="color:var(--text-dim); font-size:12px;">Factory reset erases all sensor configuration and restores defaults.</p>
+              <button id="cfg-factory-btn" class="danger">Factory Reset</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-recording" class="view">
+          <div class="recording-layout">
+            <div class="config-card">
+              <h3>Record</h3>
+              <div id="record-status-row" class="cfg-row">
+                <span id="record-led" class="led"></span>
+                <span id="record-status-label">Not recording</span>
+              </div>
+              <div id="record-stats" class="config-current-note">
+                Duration: <span id="record-duration">0.0s</span> &nbsp;|&nbsp;
+                Samples: <span id="record-sample-count">0</span>
+              </div>
+              <div class="config-actions">
+                <button id="record-start-btn">● Record</button>
+                <button id="record-stop-btn" class="secondary" disabled>■ Stop</button>
+              </div>
+            </div>
+
+            <div class="config-card">
+              <h3>Playback</h3>
+              <div id="playback-current-file" class="config-current-note">No file loaded.</div>
+              <div class="config-actions">
+                <button id="playback-play-btn" class="secondary">▶ Play</button>
+                <button id="playback-pause-btn" class="secondary">⏸ Pause</button>
+                <button id="playback-stop-btn" class="secondary">■ Stop</button>
+              </div>
+              <label class="cfg-row">Speed
+                <select id="playback-speed-select">
+                  <option value="0.25">0.25x</option>
+                  <option value="0.5">0.5x</option>
+                  <option value="1" selected>1x</option>
+                  <option value="2">2x</option>
+                  <option value="4">4x</option>
+                </select>
+              </label>
+              <div class="cal-progress-bar"><div id="playback-progress-fill" class="cal-progress-fill"></div></div>
+              <div id="playback-progress-label" class="cal-progress-label">0 / 0 samples</div>
+            </div>
+          </div>
+
+          <div class="config-card" style="margin-top:14px;">
+            <h3>Recorded Sessions</h3>
+            <div class="table-wrap">
+              <table id="recording-file-table">
+                <thead>
+                  <tr><th>File</th><th>Date</th><th>Duration</th><th>Samples</th><th>Size</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="recording-file-tbody">
+                  <tr><td colspan="6" style="color:var(--text-dim);">No recordings yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="/static/js/app.js"></script>
+  <script src="/static/js/witmotion.js"></script>
+  <script src="/static/js/three_driver.js"></script>
+  <script src="/static/js/three_swing.js"></script>
+  <script src="/static/js/golfsense.js"></script>
+</body>
+</html>

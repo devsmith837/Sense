@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+
+venv/
+.venv/
+
+# Recorded sessions are user-generated data, not source - keep the folder
+# structure (see sessions/.gitkeep) but don't commit the recordings/exports.
+sessions/*.gsw
+sessions/*.csv
+
+.DS_Store
+Thumbs.db
