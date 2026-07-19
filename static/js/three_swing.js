@@ -11,7 +11,12 @@ const KEY_MOMENT_STYLE = {
   follow_through: { color: 0x3498db, label: "Follow-through" },
 };
 
-const CLUB_LOCAL_OFFSET = new THREE.Vector3(0, -2.6, 0); // matches Panel 1's approximate shaft length
+// Clubhead position relative to the pivot (hands/grip), used to sweep an
+// approximate 3D arc from orientation alone. Reuses three_driver.js's
+// spec-derived SHAFT_LENGTH so the arc's radius matches the actual 3D club
+// model 1:1 - a real swing pivots near the hands, and the head sweeps a
+// wide arc as a result (see HEAD_CENTER_X in three_driver.js).
+const CLUB_LOCAL_OFFSET = new THREE.Vector3(HEAD_CENTER_X, 0, 0);
 
 function initSwingReplay() {
   const canvas = document.getElementById("panel2-canvas");
@@ -19,20 +24,22 @@ function initSwingReplay() {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-  const defaultCamPos = new THREE.Vector3(5, 3.5, 6);
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+  // The arc's radius now matches the real ~20-unit shaft length (see
+  // CLUB_LOCAL_OFFSET), so this needs the same wider framing as Panel 1.
+  const defaultCamPos = new THREE.Vector3(-14, 12, 24);
   camera.position.copy(defaultCamPos);
 
   const controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.target.set(0, -1, 0);
+  controls.target.set(HEAD_CENTER_X / 2, -3, 0);
   controls.update();
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x222233, 1.3));
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
   dirLight.position.set(5, 8, 5);
   scene.add(dirLight);
-  scene.add(new THREE.GridHelper(14, 14, 0x3a3f4a, 0x24272e));
+  scene.add(new THREE.GridHelper(50, 20, 0x3a3f4a, 0x24272e));
 
   const arcGeo = new THREE.BufferGeometry();
   const arcMat = new THREE.LineBasicMaterial({ vertexColors: true });
@@ -43,8 +50,11 @@ function initSwingReplay() {
   const markerGroup = new THREE.Group();
   scene.add(markerGroup);
 
+  // Full scale (no shrinking needed): CLUB_LOCAL_OFFSET reuses the same
+  // SHAFT_LENGTH the model itself is built from, so the model's head lands
+  // exactly on the arc's positions with the pivot held fixed at the scene
+  // origin - see setScrubberToIndex().
   const { group: miniDriver, face: miniFace } = buildDriverHeadGroup();
-  miniDriver.scale.set(0.5, 0.5, 0.5);
   scene.add(miniDriver);
 
   let lastW = 0, lastH = 0;
@@ -154,7 +164,7 @@ function renderKeyMoments(swing) {
     const style = KEY_MOMENT_STYLE[key];
     if (!style || idx >= swing.positions.length) continue;
     const sphere = new THREE.Mesh(
-      new THREE.SphereGeometry(0.12, 12, 10),
+      new THREE.SphereGeometry(0.9, 12, 10), // sized for the ~20-unit-radius arc
       new THREE.MeshBasicMaterial({ color: style.color })
     );
     sphere.position.copy(swing.positions[idx]);
@@ -184,7 +194,11 @@ function renderMarkerTicks(swing) {
 function setScrubberToIndex(swing, idx) {
   idx = Math.max(0, Math.min(swing.samples.length - 1, idx));
   const t = swing.samples[idx].t;
-  _swingReplay.miniDriver.position.copy(swing.positions[idx]);
+  // The pivot (grip / model origin) stays fixed at the scene origin - same
+  // reference point positions[] was computed relative to - so the model's
+  // own head geometry lands exactly on the drawn arc after rotation, with
+  // no separate position offset needed.
+  _swingReplay.miniDriver.position.set(0, 0, 0);
   _swingReplay.miniDriver.quaternion.copy(swing.deltaQuats[idx]);
 
   const absFace = Math.abs(swing.faceAngles[idx]);

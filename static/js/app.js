@@ -96,7 +96,11 @@ function renderCalibration() {
 socket.on("calibration_status", (data) => {
   window.golfsenseCalibration = { calibrated: data.calibrated, reference: data.reference || null };
   renderCalibration();
-  if (data.calibrated) showToast("Calibrated ✓ — angles now relative to address");
+  if (data.calibrated) {
+    showToast(data.auto
+      ? "Auto-calibrated at address ✓ — angles now relative to address"
+      : "Position reset to address ✓");
+  }
 });
 
 socket.on("connect", () => {

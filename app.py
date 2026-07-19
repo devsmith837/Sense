@@ -181,6 +181,31 @@ class SensorManager:
                 "content": ["time", "acc", "gyro", "angle", "mag", "quaternion"],
             }
         socketio.emit("config_state", self.config)
+        threading.Thread(target=self._auto_calibrate_after_connect, args=(s,), daemon=True).start()
+
+    def _auto_calibrate_after_connect(self, connecting_sensor):
+        """
+        Calibrates immediately once the first full sample is available,
+        with no manual button press - the user is expected to already be
+        holding the club at address when they hit Connect. Grabs whatever
+        orientation is present at that instant rather than waiting for the
+        club to settle; the Calibrate button remains available afterward
+        to manually re-zero mid-session if drift occurs or address wasn't
+        held yet when this fired.
+        """
+        deadline = time.time() + 3.0
+        required = ("quat_q0", "quat_q1", "quat_q2", "quat_q3", "angle_roll", "angle_pitch", "angle_yaw")
+        while time.time() < deadline:
+            if self.active is not connecting_sensor:
+                return  # disconnected/reconnected before this sensor produced data
+            sample = self.snapshot()
+            if all(k in sample for k in required):
+                reference = self.calibrate_address()
+                socketio.emit("calibration_status", {
+                    "calibrated": reference is not None, "reference": reference, "auto": True,
+                })
+                return
+            time.sleep(0.05)
 
     def disconnect(self):
         with self.lock:
